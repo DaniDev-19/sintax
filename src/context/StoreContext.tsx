@@ -52,6 +52,8 @@ interface StoreContextType {
   updateCourseStatus: (courseId: string, status: CourseStatus) => void;
   addStudent: (name: string, email: string, courseId: string, section?: string, institution?: string) => void;
   deleteStudent: (studentId: string) => void;
+  enrollStudentInCourse: (studentId: string, courseId: string) => void;
+  unenrollStudentFromCourse: (studentId: string, courseId: string) => void;
   updateUserStatus: (userId: string, status: UserStatus) => void;
   updateUserRole: (userId: string, role: UserRole) => void;
   updateUserProfile: (userId: string, updates: Partial<User>) => void;
@@ -80,9 +82,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             u.id !== 'user-admin' &&
             u.email !== 'admin@sintax.edu'
         );
-        // Garantizar que baddevprograming@gmail.com siempre esté
+        // Garantizar que baddevprograming@gmail.com y danidev@gmail.com siempre estén
         if (!clean.some((u) => u.email.toLowerCase() === 'baddevprograming@gmail.com')) {
           clean.unshift(INITIAL_USERS[0]);
+        }
+        if (!clean.some((u) => u.email.toLowerCase() === 'danidev@gmail.com')) {
+          clean.push(INITIAL_USERS[1]);
         }
         return clean;
       } catch {
@@ -437,6 +442,53 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     );
   };
 
+  const enrollStudentInCourse = (studentId: string, courseId: string) => {
+    setCourses((prev) =>
+      prev.map((c) =>
+        c.id === courseId
+          ? { ...c, studentIds: [...new Set([...(c.studentIds || []), studentId])] }
+          : c
+      )
+    );
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === studentId
+          ? { ...u, courseIds: [...new Set([...(u.courseIds || []), courseId])] }
+          : u
+      )
+    );
+    if (isSupabaseConfigured && supabase) {
+      supabase.from('course_enrollments').upsert(
+        { course_id: courseId, student_id: studentId },
+        { onConflict: 'course_id,student_id' }
+      ).then();
+    }
+  };
+
+  const unenrollStudentFromCourse = (studentId: string, courseId: string) => {
+    setCourses((prev) =>
+      prev.map((c) =>
+        c.id === courseId
+          ? { ...c, studentIds: (c.studentIds || []).filter((id) => id !== studentId) }
+          : c
+      )
+    );
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === studentId
+          ? { ...u, courseIds: (u.courseIds || []).filter((id) => id !== courseId) }
+          : u
+      )
+    );
+    if (isSupabaseConfigured && supabase) {
+      supabase
+        .from('course_enrollments')
+        .delete()
+        .match({ course_id: courseId, student_id: studentId })
+        .then();
+    }
+  };
+
   const updateUserStatus = (userId: string, status: UserStatus) => {
     setUsers((prev) =>
       prev.map((u) => (u.id === userId ? { ...u, status } : u))
@@ -467,6 +519,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     );
     if (authUser && authUser.id === userId) {
       updateCurrentUser(updates);
+    }
+    if (isSupabaseConfigured && supabase) {
+      const dbUpdates: Record<string, any> = {};
+      if (updates.name) dbUpdates.full_name = updates.name;
+      if (updates.section) dbUpdates.section = updates.section;
+      if (updates.institution) dbUpdates.institution = updates.institution;
+      if (updates.status) dbUpdates.status = updates.status;
+      if (updates.avatar) dbUpdates.avatar_url = updates.avatar;
+      if (Object.keys(dbUpdates).length > 0) {
+        supabase.from('profiles').update(dbUpdates).eq('id', userId).then();
+      }
     }
   };
 
@@ -632,6 +695,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateCourseStatus,
         addStudent,
         deleteStudent,
+        enrollStudentInCourse,
+        unenrollStudentFromCourse,
         updateUserStatus,
         updateUserRole,
         updateUserProfile,

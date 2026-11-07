@@ -3,9 +3,6 @@ import type { User, UserRole } from '../types';
 import { INITIAL_USERS } from '../data/mockData';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
-// Clave de migración para limpiar datos mock antiguos
-const MIGRATION_KEY = 'sintax_v2_clean_prod_v3';
-
 // Asegurar que el usuario admin principal esté configurado
 const ADMIN_USER: User = {
   id: 'user-admin-baddev',
@@ -40,35 +37,11 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Ejecutar limpieza preventiva de datos mock legacy
-  if (typeof window !== 'undefined' && localStorage.getItem(MIGRATION_KEY) !== 'true') {
-    const existingRaw = localStorage.getItem('sintax_users');
-    if (
-      existingRaw &&
-      (existingRaw.includes('profesor@sintax.edu') ||
-        existingRaw.includes('user-teacher-1') ||
-        existingRaw.includes('Ana Gómez'))
-    ) {
-      localStorage.removeItem('sintax_users');
-      localStorage.removeItem('sintax_courses');
-      localStorage.removeItem('sintax_evaluations');
-      localStorage.removeItem('sintax_submissions');
-      localStorage.removeItem('sintax_attendances');
-      localStorage.removeItem('sintax_documents');
-      localStorage.removeItem('sintax_reviews');
-      localStorage.removeItem('sintax_auth_user');
-      localStorage.removeItem('sintax_jwt_token');
-      localStorage.removeItem('sintax_current_user_id');
-    }
-    localStorage.setItem(MIGRATION_KEY, 'true');
-  }
-
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('sintax_auth_user');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Si es el mock viejo de Dani Dev o no es un usuario válido, descartar
         if (parsed.email === 'profesor@sintax.edu' || parsed.id === 'user-teacher-1') {
           localStorage.removeItem('sintax_auth_user');
           return null;
@@ -146,7 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe();
   }, []);
 
-  const login = async (email: string, password?: string): Promise<{ success: boolean; message?: string }> => {
+  const login = async (email: string, _password?: string): Promise<{ success: boolean; message?: string }> => {
     const cleanEmail = email.toLowerCase().trim();
 
     // 1. Manejo especial y prioritario del Administrador Principal
@@ -163,9 +136,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Si Supabase está disponible, sincronizar el perfil admin en la tabla profiles
       if (isSupabaseConfigured && supabase) {
         try {
-          if (password) {
-            await supabase.auth.signInWithPassword({ email: cleanEmail, password });
-          }
           await supabase.from('profiles').upsert(
             {
               email: cleanEmail,
@@ -191,22 +161,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true };
     }
 
-    // 2. Intentar autenticar contra Supabase Auth y tabla profiles
+    // 2. Autenticar mediante tabla profiles de Supabase
     if (isSupabaseConfigured && supabase) {
       try {
-        if (password) {
-          const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
-            email: cleanEmail,
-            password,
-          });
-          if (authData?.session) {
-            setJwtToken(authData.session.access_token);
-          }
-          if (authErr) {
-            // Registrar pero no bloquear si el usuario existe en profiles
-          }
-        }
-
         // Consultar perfil en la tabla profiles
         const { data: profile } = await supabase
           .from('profiles')
@@ -257,12 +214,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // 3. Fallback a usuarios registrados en localStorage
-    const savedUsers: User[] = JSON.parse(
-      localStorage.getItem('sintax_users') || JSON.stringify(INITIAL_USERS)
+    // 3. Fallback a usuarios registrados (INITIAL_USERS + localStorage)
+    const rawLocalUsers: User[] = JSON.parse(
+      localStorage.getItem('sintax_users') || '[]'
     );
+    const combinedUsers = [...INITIAL_USERS];
+    for (const u of rawLocalUsers) {
+      if (!combinedUsers.some((c) => c.email.toLowerCase() === u.email.toLowerCase())) {
+        combinedUsers.push(u);
+      }
+    }
 
-    const found = savedUsers.find((u) => u.email.toLowerCase().trim() === cleanEmail);
+    const found = combinedUsers.find((u) => u.email.toLowerCase().trim() === cleanEmail);
 
     if (!found) {
       return { success: false, message: 'No existe una cuenta registrada con este correo electrónico.' };
@@ -278,6 +241,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setJwtToken(token);
     setUser(found);
 
+    // Asegurar que sintax_users guarde este usuario en localStorage
+    if (!rawLocalUsers.some((u) => u.email.toLowerCase() === cleanEmail)) {
+      rawLocalUsers.push(found);
+      localStorage.setItem('sintax_users', JSON.stringify(rawLocalUsers));
+    }
+
     return { success: true };
   };
 
@@ -287,26 +256,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     role: UserRole,
     section: string = 'Sección General',
     institution: string = 'Sintax Academy',
-    password?: string
+    _password?: string
   ): Promise<{ success: boolean; message?: string }> => {
     const cleanEmail = email.toLowerCase().trim();
 
     // Forzar rol admin si es baddevprograming@gmail.com
     const effectiveRole: UserRole = cleanEmail === ADMIN_USER.email ? 'admin' : role;
 
-    const savedUsers: User[] = JSON.parse(
-      localStorage.getItem('sintax_users') || JSON.stringify(INITIAL_USERS)
+    const rawLocalUsers: User[] = JSON.parse(
+      localStorage.getItem('sintax_users') || '[]'
     );
+    const combinedUsers = [...INITIAL_USERS];
+    for (const u of rawLocalUsers) {
+      if (!combinedUsers.some((c) => c.email.toLowerCase() === u.email.toLowerCase())) {
+        combinedUsers.push(u);
+      }
+    }
 
-    const existing = savedUsers.find((u) => u.email.toLowerCase().trim() === cleanEmail);
+    const existing = combinedUsers.find((u) => u.email.toLowerCase().trim() === cleanEmail);
     if (existing) {
       return { success: false, message: 'Ya existe un usuario con este correo electrónico.' };
     }
 
-    const cleanSeed = encodeURIComponent(name);
+    const cleanSeed = encodeURIComponent(name || cleanEmail.split('@')[0]);
     const newUser: User = {
       id: `user-${effectiveRole}-${Date.now()}`,
-      name,
+      name: name || cleanEmail.split('@')[0],
       email: cleanEmail,
       role: effectiveRole,
       status: 'active',
@@ -317,29 +292,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString().split('T')[0],
     };
 
-    // Registrar en Supabase si está activo
+    // Si es un estudiante, matricularlo automáticamente en las materias activas existentes
+    if (effectiveRole === 'student') {
+      try {
+        const savedCoursesRaw = localStorage.getItem('sintax_courses');
+        if (savedCoursesRaw) {
+          const parsedCourses = JSON.parse(savedCoursesRaw);
+          if (Array.isArray(parsedCourses) && parsedCourses.length > 0) {
+            const activeCourses = parsedCourses.filter((c: any) => c.status === 'active');
+            const targetCourses = activeCourses.length > 0 ? activeCourses : parsedCourses;
+            const targetCourseIds = targetCourses.map((c: any) => c.id);
+            newUser.courseIds = targetCourseIds;
+
+            const updatedCourses = parsedCourses.map((c: any) => {
+              if (targetCourseIds.includes(c.id)) {
+                return {
+                  ...c,
+                  studentIds: [...new Set([...(c.studentIds || []), newUser.id])],
+                };
+              }
+              return c;
+            });
+            localStorage.setItem('sintax_courses', JSON.stringify(updatedCourses));
+          }
+        }
+      } catch {
+        // Continuar si no hay materias aún
+      }
+    }
+
+    // Registrar en Supabase tabla profiles si está activo
     if (isSupabaseConfigured && supabase) {
       try {
-        if (password) {
-          await supabase.auth.signUp({
-            email: cleanEmail,
-            password,
-            options: {
-              data: {
-                name,
-                role: effectiveRole,
-                section,
-                institution,
-              },
-            },
-          });
-        }
-
-        // Insertar en tabla pública profiles
-        await supabase.from('profiles').upsert(
+        // Insertar en tabla pública profiles con reintento seguro si faltan columnas
+        const { error: upsertErr } = await supabase.from('profiles').upsert(
           {
             email: cleanEmail,
-            full_name: name,
+            full_name: newUser.name,
             role: effectiveRole,
             status: 'active',
             institution,
@@ -348,12 +337,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           },
           { onConflict: 'email' }
         );
+
+        if (upsertErr) {
+          // Si el esquema de Supabase aún no tiene institution/section, guardar columnas base
+          await supabase.from('profiles').upsert(
+            {
+              email: cleanEmail,
+              full_name: newUser.name,
+              role: effectiveRole,
+              avatar_url: newUser.avatar,
+            },
+            { onConflict: 'email' }
+          );
+        }
       } catch {
         // Fallback exitoso a almacenamiento local
       }
     }
 
-    const updatedList = [...savedUsers, newUser];
+    const updatedList = [...rawLocalUsers, newUser];
     localStorage.setItem('sintax_users', JSON.stringify(updatedList));
 
     const token = 'jwt_stx_' + btoa(newUser.id + ':' + newUser.role + ':' + Date.now());

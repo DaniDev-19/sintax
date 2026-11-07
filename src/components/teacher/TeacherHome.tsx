@@ -89,15 +89,19 @@ export const TeacherHome: React.FC<TeacherHomeProps> = ({ onNavigateTab, onViewR
           <span className="text-[10px] text-indigo-500 font-bold">Gestionar Asignaturas →</span>
         </div>
 
-        <div className="p-4 rounded-2xl bg-[var(--bg-card)] border-2 border-[var(--border-main)] shadow-[3px_3px_0px_var(--shadow-color)]">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center justify-between">
+        <div
+          onClick={() => onNavigateTab('academic-manager')}
+          className="p-4 rounded-2xl bg-[var(--bg-card)] border-2 border-[var(--border-main)] hover:border-emerald-500 shadow-[3px_3px_0px_var(--shadow-color)] cursor-pointer transition active:scale-95 group"
+          title="Ver y Gestionar Alumnos"
+        >
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] group-hover:text-emerald-400 flex items-center justify-between">
             Alumnos
             <Users className="w-4 h-4 text-emerald-500" />
           </span>
           <div className="text-2xl sm:text-3xl font-black text-emerald-500 mt-1">
             {totalStudents}
           </div>
-          <span className="text-[10px] text-[var(--text-muted)]">Inscritos en tus cursos</span>
+          <span className="text-[10px] text-emerald-500 font-bold">Ver Nómina →</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-[var(--bg-card)] border-2 border-[var(--border-main)] shadow-[3px_3px_0px_var(--shadow-color)]">

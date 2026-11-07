@@ -33,6 +33,9 @@ export const AcademicManager: React.FC = () => {
     updateCourseStatus,
     addStudent,
     deleteStudent,
+    enrollStudentInCourse,
+    unenrollStudentFromCourse,
+    updateUserProfile,
     currentUser,
   } = useStore();
 
@@ -60,15 +63,24 @@ export const AcademicManager: React.FC = () => {
   // Modal state for deleting course
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
 
-  // Form states for new student
+  // Student form modes & states
+  const studentList = users.filter((u) => u.role === 'student');
+  const [studentFormMode, setStudentFormMode] = useState<'assign' | 'create'>('assign');
+  const [selectedStudentToAssign, setSelectedStudentToAssign] = useState(studentList[0]?.id || '');
+  const [assignTargetCourse, setAssignTargetCourse] = useState(courses[0]?.id || '');
+
+  // Modal states for editing student section/institution
+  const [editingStudent, setEditingStudent] = useState<any | null>(null);
+  const [editStudentSection, setEditStudentSection] = useState('');
+  const [editStudentInstitution, setEditStudentInstitution] = useState('');
+
+  // Form states for manual student registration
   const [studentName, setStudentName] = useState('');
   const [studentEmail, setStudentEmail] = useState('');
   const [studentCourseId, setStudentCourseId] = useState(courses[0]?.id || '');
   const [studentSection, setStudentSection] = useState('Sección A');
   const [studentInstitution, setStudentInstitution] = useState('Sintax Academy');
   const [studentSuccess, setStudentSuccess] = useState(false);
-
-  const studentList = users.filter((u) => u.role === 'student');
 
   const courseSelectOptions = courses.map((c) => ({
     value: c.id,
@@ -162,6 +174,31 @@ export const AcademicManager: React.FC = () => {
     setStudentSuccess(true);
     toast.success(`Estudiante "${studentName.trim()}" matriculado correctamente.`, 'Alumno Registrado');
     setTimeout(() => setStudentSuccess(false), 3000);
+  };
+
+  const handleAssignExistingStudent = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudentToAssign || !assignTargetCourse) {
+      toast.error('Selecciona un estudiante y una materia.');
+      return;
+    }
+    enrollStudentInCourse(selectedStudentToAssign, assignTargetCourse);
+    const stObj = studentList.find((s) => s.id === selectedStudentToAssign);
+    const crObj = courses.find((c) => c.id === assignTargetCourse);
+    toast.success(`Estudiante "${stObj?.name}" asignado a "${crObj?.name}".`, 'Materia Asignada');
+    setStudentSuccess(true);
+    setTimeout(() => setStudentSuccess(false), 3000);
+  };
+
+  const handleSaveStudentEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStudent) return;
+    updateUserProfile(editingStudent.id, {
+      section: editStudentSection.trim() || 'General',
+      institution: editStudentInstitution.trim() || 'Sintax Academy',
+    });
+    toast.success(`Datos de ${editingStudent.name} actualizados.`);
+    setEditingStudent(null);
   };
 
   return (
@@ -397,69 +434,131 @@ export const AcademicManager: React.FC = () => {
       ) : (
         /* Students Management Tab */
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Form to register student */}
+          {/* Form to register / assign student */}
           <div className="lg:col-span-1">
             <Card accentColor="emerald" className="space-y-4">
-              <h2 className="text-sm font-black text-[var(--text-main)] flex items-center gap-2 uppercase tracking-wider">
-                <PlusCircle className="w-4 h-4 text-emerald-500" />
-                Matricular Nuevo Alumno
-              </h2>
+              <div className="flex items-center justify-between border-b border-[var(--border-main)] pb-3">
+                <h2 className="text-sm font-black text-[var(--text-main)] flex items-center gap-2 uppercase tracking-wider">
+                  <PlusCircle className="w-4 h-4 text-emerald-500" />
+                  Matricular Alumno
+                </h2>
+                <div className="flex items-center gap-1 bg-[var(--bg-app)] p-0.5 rounded-lg border border-[var(--border-main)]">
+                  <button
+                    type="button"
+                    onClick={() => setStudentFormMode('assign')}
+                    className={`px-2 py-1 text-[10px] font-bold rounded-md transition cursor-pointer ${
+                      studentFormMode === 'assign'
+                        ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                    }`}
+                  >
+                    Asignar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStudentFormMode('create')}
+                    className={`px-2 py-1 text-[10px] font-bold rounded-md transition cursor-pointer ${
+                      studentFormMode === 'create'
+                        ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                    }`}
+                  >
+                    Crear Nuevo
+                  </button>
+                </div>
+              </div>
 
               {studentSuccess && (
                 <div className="p-3 rounded-xl bg-emerald-500/15 border-2 border-emerald-500/40 text-emerald-600 dark:text-emerald-300 text-xs font-bold flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4" /> Estudiante matriculado con éxito.
+                  <CheckCircle className="w-4 h-4" /> Acción completada con éxito.
                 </div>
               )}
 
-              <form onSubmit={handleCreateStudent} className="space-y-3.5">
-                <Input
-                  label="Nombre y Apellido"
-                  value={studentName}
-                  onChange={(e) => setStudentName(e.target.value)}
-                  placeholder="Ej: Sofía Velásquez"
-                  required
-                />
+              {studentFormMode === 'assign' ? (
+                <form onSubmit={handleAssignExistingStudent} className="space-y-3.5">
+                  <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                    Inscribe a un alumno registrado en tus materias para que aparezca en tu pase de lista y sábana de notas.
+                  </p>
 
-                <Input
-                  label="Correo Electrónico"
-                  type="email"
-                  value={studentEmail}
-                  onChange={(e) => setStudentEmail(e.target.value)}
-                  placeholder="ej: sofia@estudiante.edu"
-                  required
-                />
-
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    label="Sección / Curso"
-                    value={studentSection}
-                    onChange={(e) => setStudentSection(e.target.value)}
-                    placeholder="Ej: Sección A"
+                  <CustomSelect
+                    label="Seleccionar Alumno Registrado"
+                    options={studentList.map((st) => ({
+                      value: st.id,
+                      label: st.name,
+                      sublabel: `${st.email} • Aula: ${st.section || 'General'}`,
+                    }))}
+                    value={selectedStudentToAssign || studentList[0]?.id || ''}
+                    onChange={setSelectedStudentToAssign}
                   />
-                  <Input
-                    label="Institución"
-                    value={studentInstitution}
-                    onChange={(e) => setStudentInstitution(e.target.value)}
-                    placeholder="Ej: Sintax Academy"
+
+                  <CustomSelect
+                    label="Materia a Asignar"
+                    options={courseSelectOptions}
+                    value={assignTargetCourse || courses[0]?.id || ''}
+                    onChange={setAssignTargetCourse}
                   />
-                </div>
 
-                <CustomSelect
-                  label="Materia Asignada"
-                  options={courseSelectOptions}
-                  value={studentCourseId}
-                  onChange={setStudentCourseId}
-                />
+                  <Button
+                    type="submit"
+                    variant="accent"
+                    className="w-full mt-2"
+                    icon={<PlusCircle className="w-4 h-4" />}
+                    disabled={studentList.length === 0 || courses.length === 0}
+                  >
+                    Asignar a Materia
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleCreateStudent} className="space-y-3.5">
+                  <Input
+                    label="Nombre y Apellido"
+                    value={studentName}
+                    onChange={(e) => setStudentName(e.target.value)}
+                    placeholder="Ej: Sofía Velásquez"
+                    required
+                  />
 
-                <Button
-                  type="submit"
-                  variant="accent"
-                  className="w-full mt-2"
-                  icon={<PlusCircle className="w-4 h-4" />}
-                >
-                  Matricular Estudiante
-                </Button>
-              </form>
+                  <Input
+                    label="Correo Electrónico"
+                    type="email"
+                    value={studentEmail}
+                    onChange={(e) => setStudentEmail(e.target.value)}
+                    placeholder="ej: sofia@estudiante.edu"
+                    required
+                  />
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      label="Aula o Sección"
+                      value={studentSection}
+                      onChange={(e) => setStudentSection(e.target.value)}
+                      placeholder="Ej: Sección A"
+                    />
+                    <Input
+                      label="Institución"
+                      value={studentInstitution}
+                      onChange={(e) => setStudentInstitution(e.target.value)}
+                      placeholder="Ej: Sintax Academy"
+                    />
+                  </div>
+
+                  <CustomSelect
+                    label="Materia Inicial"
+                    options={courseSelectOptions}
+                    value={studentCourseId}
+                    onChange={setStudentCourseId}
+                  />
+
+                  <Button
+                    type="submit"
+                    variant="accent"
+                    className="w-full mt-2"
+                    icon={<PlusCircle className="w-4 h-4" />}
+                  >
+                    Crear y Matricular Estudiante
+                  </Button>
+                </form>
+              )}
             </Card>
           </div>
 
@@ -476,40 +575,114 @@ export const AcademicManager: React.FC = () => {
               </Card>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {studentList.map((st) => (
-                  <Card key={st.id} className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <img
-                          src={st.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${st.name}`}
-                          alt={st.name}
-                          className="w-10 h-10 rounded-xl bg-[var(--bg-app)] border border-[var(--border-main)] object-cover shadow-[1px_1px_0px_var(--shadow-color)]"
-                        />
-                        <div>
-                          <h4 className="text-xs font-bold text-[var(--text-main)]">{st.name}</h4>
-                          <span className="text-[11px] text-[var(--text-muted)] font-mono">{st.email}</span>
+                {studentList.map((st) => {
+                  const studentCourses = courses.filter((c) => c.studentIds?.includes(st.id));
+                  const unassignedCourses = courses.filter((c) => !c.studentIds?.includes(st.id));
+
+                  return (
+                    <Card key={st.id} className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <img
+                            src={st.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${st.name}`}
+                            alt={st.name}
+                            className="w-10 h-10 rounded-xl bg-[var(--bg-app)] border border-[var(--border-main)] object-cover shadow-[1px_1px_0px_var(--shadow-color)]"
+                          />
+                          <div>
+                            <h4 className="text-xs font-bold text-[var(--text-main)]">{st.name}</h4>
+                            <span className="text-[11px] text-[var(--text-muted)] font-mono">{st.email}</span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            deleteStudent(st.id);
+                            toast.info(`Estudiante ${st.name} eliminado de la nómina.`);
+                          }}
+                          className="p-1.5 rounded-lg border border-[var(--border-main)] hover:border-rose-400 text-[var(--text-muted)] hover:text-rose-400 transition cursor-pointer shadow-[1px_1px_0px_var(--shadow-color)]"
+                          title="Eliminar Estudiante"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="pt-2 border-t border-[var(--border-main)] text-[11px] text-[var(--text-muted)] flex items-center justify-between">
+                        <span>{st.institution || 'Sintax Academy'}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-[var(--text-main)]">{st.section || 'General'}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingStudent(st);
+                              setEditStudentSection(st.section || 'General');
+                              setEditStudentInstitution(st.institution || 'Sintax Academy');
+                            }}
+                            className="p-1 rounded hover:bg-[var(--bg-app)] text-[var(--text-muted)] hover:text-indigo-400 transition cursor-pointer"
+                            title="Editar Sección o Institución"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          deleteStudent(st.id);
-                          toast.info(`Estudiante ${st.name} eliminado de la nómina.`);
-                        }}
-                        className="p-1.5 rounded-lg border border-[var(--border-main)] hover:border-rose-400 text-[var(--text-muted)] hover:text-rose-400 transition cursor-pointer shadow-[1px_1px_0px_var(--shadow-color)]"
-                        title="Eliminar Estudiante"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                      {/* Materias Inscritas */}
+                      <div className="pt-2 border-t border-[var(--border-main)] space-y-2">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center justify-between">
+                          <span>Materias Asignadas ({studentCourses.length})</span>
+                        </div>
+                        {studentCourses.length === 0 ? (
+                          <span className="text-[10px] text-amber-500 font-medium block">
+                            Sin materias asignadas aún
+                          </span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5">
+                            {studentCourses.map((c) => (
+                              <span
+                                key={c.id}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/30"
+                              >
+                                {c.name}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    unenrollStudentFromCourse(st.id, c.id);
+                                    toast.info(`Desmatriculado de ${c.name}`);
+                                  }}
+                                  className="hover:text-rose-400 transition cursor-pointer ml-0.5 text-xs font-black"
+                                  title="Remover de esta materia"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
 
-                    <div className="pt-2 border-t border-[var(--border-main)] text-[11px] text-[var(--text-muted)] flex items-center justify-between">
-                      <span>{st.institution || 'Sintax Academy'}</span>
-                      <span className="font-bold text-[var(--text-main)]">{st.section || 'General'}</span>
-                    </div>
-                  </Card>
-                ))}
+                        {/* Inscribir en otra materia rápidamente si hay disponibles */}
+                        {unassignedCourses.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            <span className="text-[10px] text-[var(--text-muted)]">+ Asignar:</span>
+                            {unassignedCourses.map((uc) => (
+                              <button
+                                key={uc.id}
+                                type="button"
+                                onClick={() => {
+                                  enrollStudentInCourse(st.id, uc.id);
+                                  toast.success(`Inscrito en ${uc.name}`);
+                                }}
+                                className="px-2 py-0.5 rounded text-[10px] font-bold border border-[var(--border-main)] hover:border-emerald-500 hover:text-emerald-400 text-[var(--text-muted)] transition cursor-pointer"
+                                title={`Inscribir en ${uc.name}`}
+                              >
+                                + {uc.name}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -653,6 +826,72 @@ export const AcademicManager: React.FC = () => {
                 Eliminar Materia
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para Editar Alumno (Sección / Institución) */}
+      {editingStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in-95 duration-150">
+          <div className="w-full max-w-md p-6 rounded-3xl bg-[var(--bg-card)] border-2 border-[var(--border-main)] shadow-[6px_6px_0px_var(--shadow-color)] space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--border-main)] pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-[var(--text-main)] uppercase tracking-wider">
+                    Editar Datos del Alumno
+                  </h3>
+                  <p className="text-[11px] text-[var(--text-muted)] font-mono">
+                    {editingStudent.email}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingStudent(null)}
+                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-app)] transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-[var(--text-main)]">
+              Corrige el aula o sección a la que pertenece <strong className="font-bold text-indigo-400">{editingStudent.name}</strong>:
+            </p>
+
+            <form onSubmit={handleSaveStudentEdit} className="space-y-3.5">
+              <Input
+                label="Aula o Sección Académica"
+                value={editStudentSection}
+                onChange={(e) => setEditStudentSection(e.target.value)}
+                placeholder="Ej: Sección A, Turno Mañana, 4to Semestre..."
+                required
+              />
+
+              <Input
+                label="Institución Educativa"
+                value={editStudentInstitution}
+                onChange={(e) => setEditStudentInstitution(e.target.value)}
+                placeholder="Ej: AcaCode, Sintax Academy..."
+                required
+              />
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--border-main)]">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setEditingStudent(null)}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" variant="primary" size="sm">
+                  Guardar Cambios
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

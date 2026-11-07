@@ -228,17 +228,21 @@ export const AuthScreen: React.FC = () => {
                   type="text"
                   value={institution}
                   onChange={(e) => setInstitution(e.target.value)}
-                  placeholder="Colegio / Academia"
+                  placeholder="Ej: Sintax Academy"
                 />
 
                 <Input
-                  label="SECCIÓN / CURSO"
+                  label="AULA O SECCIÓN"
                   type="text"
                   value={section}
                   onChange={(e) => setSection(e.target.value)}
-                  placeholder="Sección A, B..."
+                  placeholder="Ej: Sección A, B..."
                 />
               </div>
+
+              <p className="text-[10px] text-[var(--text-muted)] italic leading-tight">
+                * Las asignaturas y materias te serán asignadas por tu profesor o institución.
+              </p>
 
               <Button
                 type="submit"

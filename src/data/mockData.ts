@@ -31,6 +31,18 @@ export const INITIAL_USERS: User[] = [
     courseIds: [],
     createdAt: new Date().toISOString().split('T')[0],
   },
+  {
+    id: 'ab7fafec-edef-4bc9-879c-405d6f96ea86',
+    name: 'Profesor Dani Dev',
+    email: 'danidev@gmail.com',
+    role: 'teacher',
+    status: 'active',
+    institution: 'Sintax Academy',
+    section: 'Turno Principal',
+    avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=DaniDevTeacher&backgroundColor=6366f1',
+    courseIds: [],
+    createdAt: new Date().toISOString().split('T')[0],
+  },
 ];
 
 export const INITIAL_COURSES: Course[] = [];

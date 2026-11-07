@@ -287,7 +287,7 @@ CREATE INDEX IF NOT EXISTS idx_reviews_user ON public.app_reviews(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications(user_id);
 
 -- ====================================================================
--- SEED / USUARIO ADMINISTRADOR PRINCIPAL
+-- SEED / USUARIOS PRINCIPALES (ADMIN Y PROFESOR)
 -- ====================================================================
 INSERT INTO public.profiles (email, full_name, role, status, institution, section, avatar_url)
 VALUES (
@@ -301,6 +301,19 @@ VALUES (
 )
 ON CONFLICT (email) DO UPDATE 
 SET role = 'admin', status = 'active';
+
+INSERT INTO public.profiles (email, full_name, role, status, institution, section, avatar_url)
+VALUES (
+  'danidev@gmail.com',
+  'Prof. Dani Dev',
+  'teacher',
+  'active',
+  'Sintax Academy',
+  'Turno Principal',
+  'https://api.dicebear.com/7.x/bottts/svg?seed=DaniDevTeacher&backgroundColor=6366f1'
+)
+ON CONFLICT (email) DO UPDATE 
+SET role = 'teacher', status = 'active';
 
 -- ====================================================================
 -- TRIGGER AUTOMÁTICO: SINCRONIZAR AUTH.USERS CON PUBLIC.PROFILES
